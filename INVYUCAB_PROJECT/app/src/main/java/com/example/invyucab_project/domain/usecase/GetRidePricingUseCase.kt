@@ -10,6 +10,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import javax.inject.Inject
 import kotlin.math.roundToInt
+import com.example.invyucab_project.data.repository.AppRepository
 
 /**
  * This UseCase does ONE thing: It gets pricing data and maps it to the

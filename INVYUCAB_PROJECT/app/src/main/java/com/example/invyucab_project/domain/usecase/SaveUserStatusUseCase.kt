@@ -1,6 +1,7 @@
 package com.example.invyucab_project.domain.usecase
 
 import javax.inject.Inject
+import com.example.invyucab_project.data.repository.AppRepository
 
 /**
  * This UseCase does ONE thing: It saves the user's status to local preferences.

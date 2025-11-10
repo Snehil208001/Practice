@@ -3,8 +3,10 @@ package com.example.invyucab_project.data.repository
 import com.example.invyucab_project.data.api.CustomApiService
 import com.example.invyucab_project.data.api.GoogleMapsApiService
 import com.example.invyucab_project.data.models.*
-// This import will now work because the file is in the correct package
-import com.example.invyucab_project.data.models.PlacesResponse
+// ✅✅✅ START OF FIX ✅✅✅
+// The class is named PlacesAutocompleteResponse, not PlacesResponse
+import com.example.invyucab_project.data.models.PlacesAutocompleteResponse
+// ✅✅✅ END OF FIX ✅✅✅
 import com.example.invyucab_project.data.preferences.UserPreferencesRepository
 import retrofit2.Response
 import javax.inject.Inject
@@ -46,7 +48,10 @@ class AppRepository @Inject constructor(
 
     // --- MAPS / RIDE FUNCTIONS ---
 
-    suspend fun getPlaceAutocomplete(query: String, sessionToken: String): PlacesResponse {
+    // ✅✅✅ START OF FIX ✅✅✅
+    // Use the correct return type
+    suspend fun getPlaceAutocomplete(query: String, sessionToken: String): PlacesAutocompleteResponse {
+        // ✅✅✅ END OF FIX ✅✅✅
         return googleMapsApiService.getPlaceAutocomplete(query, sessionToken)
     }
 

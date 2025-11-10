@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+// import java.text.SimpleDateFormat // ❌ REMOVED
+// import java.util.* // ❌ REMOVED
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -37,38 +39,31 @@ class RideSelectionViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RideSelectionState())
     val uiState = _uiState.asStateFlow()
 
+    // --- Dropped PlaceId and Description ---
     private val dropPlaceId: String? = savedStateHandle.get<String>("dropPlaceId")
     private val encodedDropDescription: String? = savedStateHandle.get<String>("dropDescription")
     private val dropDescription: String = decodeUrlString(encodedDropDescription ?: "")
 
+    // --- Pickup PlaceId and Description ---
     private val pickupPlaceId: String? = savedStateHandle.get<String>("pickupPlaceId")
     private val encodedPickupDescription: String? = savedStateHandle.get<String>("pickupDescription")
     private val pickupDescription: String = decodeUrlString(encodedPickupDescription ?: "Your Current Location")
 
     private val isPickupCurrentLocation = pickupPlaceId == "current_location" || pickupPlaceId == null
 
-    private val initialRideOptions = listOf(
-        RideOption(1, Icons.Default.TwoWheeler, "Bike", "2 mins away", subtitle = "Quick Bike rides"),
-        RideOption(2, Icons.Default.ElectricRickshaw, "Auto", "2 mins away", subtitle = "Affordable Auto rides"),
-        RideOption(3, Icons.Default.LocalTaxi, "Cab Economy", "2 mins away", subtitle = "Comfy, economical"),
-        RideOption(4, Icons.Default.Stars, "Cab Premium", "5 mins away", subtitle = "Spacious & top-rated")
-    )
-
-    private val _rideOptions = MutableStateFlow(initialRideOptions)
-    val rideOptions = _rideOptions.asStateFlow()
-
     init {
         if (dropPlaceId == null || encodedDropDescription == null) {
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 errorMessage = "Drop location is missing. Please go back.",
                 isLoading = false,
                 isFetchingLocation = false
-            )
+            )}
         } else {
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 dropDescription = dropDescription,
                 pickupDescription = pickupDescription
-            )
+            )}
+            initializeRideOptions()
             if (isPickupCurrentLocation) {
                 getCurrentLocationAndProceed()
             } else {
@@ -85,15 +80,45 @@ class RideSelectionViewModel @Inject constructor(
         }
     }
 
-    // --- Location Fetching (Stays in VM due to Context/Activity coupling) ---
+    private fun initializeRideOptions() {
+        val options = listOf(
+            RideOption(
+                id = 1,
+                icon = Icons.Default.TwoWheeler,
+                name = "Bike",
+                description = "",
+                subtitle = null
+            ),
+            RideOption(
+                id = 2,
+                icon = Icons.Default.ElectricRickshaw,
+                name = "Auto",
+                description = "",
+                subtitle = null
+            ),
+            RideOption(
+                id = 3,
+                icon = Icons.Default.LocalTaxi,
+                name = "Car",
+                description = "",
+                subtitle = null
+            )
+        )
+        _uiState.update { it.copy(rideOptions = options) }
+    }
+
+    // --- Location Fetching ---
     @SuppressLint("MissingPermission")
     private fun getCurrentLocationAndProceed() {
-        _uiState.value = _uiState.value.copy(isFetchingLocation = true)
+        _uiState.update { it.copy(isFetchingLocation = true) }
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             if (location != null) {
                 val currentLatLng = LatLng(location.latitude, location.longitude)
-                _uiState.value = _uiState.value.copy(isFetchingLocation = false)
-                onLocationsReady(currentLatLng, "place_id:$dropPlaceId")
+                _uiState.update { it.copy(
+                    isFetchingLocation = false,
+                    pickupLocation = currentLatLng
+                )}
+                onLocationsReady(currentLatLng)
             } else {
                 requestNewLocation()
             }
@@ -112,27 +137,29 @@ class RideSelectionViewModel @Inject constructor(
                 fusedLocationClient.removeLocationUpdates(this)
                 locationResult.lastLocation?.let { location ->
                     val currentLatLng = LatLng(location.latitude, location.longitude)
-                    _uiState.value = _uiState.value.copy(isFetchingLocation = false)
-                    onLocationsReady(currentLatLng, "place_id:$dropPlaceId")
+                    _uiState.update { it.copy(
+                        isFetchingLocation = false,
+                        pickupLocation = currentLatLng
+                    )}
+                    onLocationsReady(currentLatLng)
                 } ?: run {
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.update { it.copy(
                         errorMessage = "Could not fetch current location.",
                         isFetchingLocation = false
-                    )
+                    )}
                 }
             }
         }
         fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
     }
 
-    // --- API Calls (Now use UseCases) ---
+    // --- API Calls ---
     private fun fetchSpecificLocationsAndRoute() {
         if (pickupPlaceId == null || dropPlaceId == null) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Missing Location", isLoading = false, isFetchingLocation = false)
+            _uiState.update { it.copy(errorMessage = "Missing Location", isLoading = false, isFetchingLocation = false) }
             return
         }
 
-        // Fetch both pickup and drop LatLng
         val pickupFlow = getPlaceDetailsUseCase.invoke(pickupPlaceId)
         val dropFlow = getPlaceDetailsUseCase.invoke(dropPlaceId)
 
@@ -142,53 +169,87 @@ class RideSelectionViewModel @Inject constructor(
             }.onEach { (pickupResult, dropResult) ->
                 when {
                     pickupResult is Resource.Loading || dropResult is Resource.Loading -> {
-                        _uiState.value = _uiState.value.copy(isLoading = true, isFetchingLocation = false)
+                        _uiState.update { it.copy(isLoading = true, isFetchingLocation = false) }
                     }
                     pickupResult is Resource.Success && dropResult is Resource.Success -> {
                         if (pickupResult.data != null && dropResult.data != null) {
-                            _uiState.value = _uiState.value.copy(
+                            _uiState.update { it.copy(
                                 pickupLocation = pickupResult.data,
                                 dropLocation = dropResult.data
-                            )
-                            onLocationsReady(pickupResult.data, "place_id:$dropPlaceId")
+                            )}
+                            onLocationsReady(pickupResult.data)
                         } else {
-                            _uiState.value = _uiState.value.copy(errorMessage = "Could not get location details.", isLoading = false)
+                            _uiState.update { it.copy(errorMessage = "Could not get location details.", isLoading = false) }
                         }
                     }
-                    pickupResult is Resource.Error -> _uiState.value = _uiState.value.copy(errorMessage = pickupResult.message, isLoading = false)
-                    dropResult is Resource.Error -> _uiState.value = _uiState.value.copy(errorMessage = dropResult.message, isLoading = false)
+                    pickupResult is Resource.Error -> _uiState.update { it.copy(errorMessage = pickupResult.message, isLoading = false) }
+                    dropResult is Resource.Error -> _uiState.update { it.copy(errorMessage = dropResult.message, isLoading = false) }
                 }
-            }.launchIn(viewModelScope)
+            }.launchIn(this)
         }
     }
 
-    private fun onLocationsReady(pickupLatLng: LatLng, destinationString: String) {
+    private fun onLocationsReady(pickupLatLng: LatLng) {
         if (dropPlaceId == null) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Drop-off location ID is missing.", isLoading = false)
+            _uiState.update { it.copy(errorMessage = "Drop-off location ID is missing.", isLoading = false) }
             return
         }
 
-        // Get Route Info
         getDirectionsAndRouteUseCase.invoke(pickupLatLng, dropPlaceId).onEach { result ->
             when (result) {
-                is Resource.Loading -> _uiState.value = _uiState.value.copy(isLoading = true)
+                is Resource.Loading -> _uiState.update { it.copy(isLoading = true) }
                 is Resource.Success -> {
                     val routeInfo = result.data!!
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.update { it.copy(
                         routePolyline = routeInfo.polyline,
                         tripDurationSeconds = routeInfo.durationSeconds,
                         tripDistanceMeters = routeInfo.distanceMeters,
                         isLoading = false,
                         errorMessage = null
-                    )
-                    // Now fetch prices
-                    fetchAllRideData(pickupLatLng, _uiState.value.dropLocation!!, routeInfo.durationSeconds, routeInfo.distanceMeters)
+                    )}
+
+                    if (_uiState.value.dropLocation == null) {
+                        fetchDropLocationAndThenPrices(pickupLatLng)
+                    } else {
+                        fetchAllRideData(pickupLatLng, _uiState.value.dropLocation!!, routeInfo.durationSeconds, routeInfo.distanceMeters)
+                    }
                 }
                 is Resource.Error -> {
-                    _uiState.value = _uiState.value.copy(errorMessage = result.message, isLoading = false)
+                    _uiState.update { it.copy(errorMessage = result.message, isLoading = false) }
                 }
             }
         }.launchIn(viewModelScope)
+    }
+
+    private fun fetchDropLocationAndThenPrices(pickupLatLng: LatLng) {
+        if (dropPlaceId == null) return
+
+        viewModelScope.launch {
+            getPlaceDetailsUseCase.invoke(dropPlaceId).collect { dropResult ->
+                when (dropResult) {
+                    is Resource.Success -> {
+                        val dropLatLng = dropResult.data
+                        if (dropLatLng != null) {
+                            _uiState.update { it.copy(dropLocation = dropLatLng, isLoading = false) }
+                            fetchAllRideData(
+                                pickup = pickupLatLng,
+                                drop = dropLatLng,
+                                durationSeconds = _uiState.value.tripDurationSeconds,
+                                distanceMeters = _uiState.value.tripDistanceMeters
+                            )
+                        } else {
+                            _uiState.update { it.copy(errorMessage = "Could not get drop-off location details.", isLoading = false) }
+                        }
+                    }
+                    is Resource.Error -> {
+                        _uiState.update { it.copy(errorMessage = dropResult.message, isLoading = false) }
+                    }
+                    is Resource.Loading -> {
+                        _uiState.update { it.copy(isLoading = true) }
+                    }
+                }
+            }
+        }
     }
 
     private fun fetchAllRideData(pickup: LatLng, drop: LatLng, durationSeconds: Int?, distanceMeters: Int?) {
@@ -196,39 +257,63 @@ class RideSelectionViewModel @Inject constructor(
         val distanceKm = (distanceMeters ?: 0) / 1000.0
         val distanceString = "%.1f km".format(distanceKm)
 
-        // Set initial loading state for prices
-        _rideOptions.update { currentOptions ->
-            currentOptions.map {
+        _uiState.update { currentState ->
+            val updatedOptions = currentState.rideOptions.map {
                 it.copy(
                     isLoadingPrice = true,
                     estimatedDurationMinutes = durationMinutes,
                     estimatedDistanceKm = distanceString
+                    // ❌ REMOVED description = "Est. drop $dropTime"
                 )
             }
+            currentState.copy(rideOptions = updatedOptions)
         }
 
-        // Call UseCase
-        getRidePricingUseCase.invoke(pickup, drop, _rideOptions.value).onEach { result ->
+        getRidePricingUseCase.invoke(pickup, drop, _uiState.value.rideOptions).onEach { result ->
             when (result) {
                 is Resource.Loading -> { /* Handled above */ }
                 is Resource.Success -> {
-                    _rideOptions.value = result.data!! // Success, update with prices
+                    _uiState.update { currentState ->
+                        val newOptions = result.data!!
+                        val currentOptions = currentState.rideOptions
+
+                        val updatedOptions = currentOptions.map { current ->
+                            val new = newOptions.find { it.name.equals(current.name, ignoreCase = true) }
+                            current.copy(
+                                price = new?.price ?: current.price,
+                                isLoadingPrice = new?.isLoadingPrice ?: false
+                            )
+                        }
+                        currentState.copy(rideOptions = updatedOptions)
+                    }
                 }
                 is Resource.Error -> {
-                    // Error, update with N/A
                     _apiError.value = result.message
-                    _rideOptions.update { currentOptions ->
-                        currentOptions.map {
+                    _uiState.update { currentState ->
+                        val updatedOptions = currentState.rideOptions.map {
                             it.copy(
                                 price = "N/A",
                                 isLoadingPrice = false
                             )
                         }
+                        currentState.copy(rideOptions = updatedOptions)
                     }
                 }
             }
         }.launchIn(viewModelScope)
     }
+
+    // ❌❌❌ REMOVED unused property ❌❌❌
+    /*
+    private val dropTime: String
+        get() {
+            val duration = _uiState.value.tripDurationSeconds ?: 0
+            val calendar = Calendar.getInstance()
+            calendar.add(Calendar.SECOND, duration)
+            val format = SimpleDateFormat("h:mm a", Locale.getDefault())
+            return format.format(calendar.time).lowercase()
+        }
+    */
 
     fun dismissError() {
         _uiState.update { it.copy(errorMessage = null) }

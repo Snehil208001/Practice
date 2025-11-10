@@ -2,6 +2,7 @@ package com.example.invyucab_project.domain.usecase
 
 import com.google.firebase.auth.FirebaseAuth
 import javax.inject.Inject
+import com.example.invyucab_project.data.repository.AppRepository
 
 /**
  * This UseCase does ONE thing: It logs the user out from Firebase
