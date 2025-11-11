@@ -3,8 +3,6 @@ package com.example.invyucab_project.mainui.allservicesscreen.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -16,8 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 // ✅✅✅ START OF FIX ✅✅✅
-// Added the correct import for 'AppBottomNavigation'
+// This import will now work because the composable exists
 import com.example.invyucab_project.core.utils.navigationsbar.AppBottomNavigation
+import com.example.invyucab_project.ui.theme.CabMintGreen // Assuming this is your theme color
 // ✅✅✅ END OF FIX ✅✅✅
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,17 +34,15 @@ fun AllServicesScreen(navController: NavController) {
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF00BFA5), // Assuming CabMintGreen
+                    containerColor = CabMintGreen, // Use your theme color
                     titleContentColor = Color.White,
                     navigationIconContentColor = Color.White
                 )
             )
         },
         bottomBar = {
-            // ✅✅✅ START OF FIX ✅✅✅
-            // Changed the name back to the correct one
-            AppBottomNavigation(navController = navController, selectedItem = "services")
-            // ✅✅✅ END OF FIX ✅✅✅
+            // ✅ This call is now valid
+            AppBottomNavigation(navController = navController, selectedItem = "Services")
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
