@@ -7,10 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.invyucab_project.core.base.BaseViewModel
 import com.example.invyucab_project.core.common.Resource
 import com.example.invyucab_project.core.navigations.Screen
-import com.example.invyucab_project.data.models.Prediction // ✅ ADDED
-import com.example.invyucab_project.domain.model.AutocompletePrediction // ✅ ADDED
+import com.example.invyucab_project.data.models.Prediction
+import com.example.invyucab_project.domain.model.AutocompletePrediction
 import com.example.invyucab_project.domain.model.HomeUiState
-import com.example.invyucab_project.domain.model.SearchField // ✅ ADDED
+import com.example.invyucab_project.domain.model.SearchField
 import com.example.invyucab_project.domain.usecase.GetAutocompletePredictionsUseCase
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.model.LatLng
@@ -88,9 +88,10 @@ class HomeViewModel @Inject constructor(
     fun onPickupQueryChange(query: String) {
         _uiState.update { it.copy(pickupQuery = query, activeField = SearchField.PICKUP) }
 
-        // This is your requested logic: if field is empty, reset it.
+        // ✅ MODIFIED: This logic is now simpler
         if (query.isBlank()) {
-            _uiState.update { it.copy(pickupResults = emptyList(), pickupPlaceId = "current_location", pickupQuery = "Your Current Location") }
+            // If query is blank (e.g., user backspaced), don't reset, just show no results
+            _uiState.update { it.copy(pickupResults = emptyList(), pickupPlaceId = null) }
             return
         }
 
@@ -106,24 +107,43 @@ class HomeViewModel @Inject constructor(
         search(query, SearchField.DROP)
     }
 
+    // ✅ MODIFIED: This logic is now correct
     fun onClearPickup() {
-        _uiState.update { it.copy(pickupQuery = "Your Current Location", pickupPlaceId = "current_location", pickupResults = emptyList()) }
+        // When user taps 'X' on a selected location, clear it and focus the field.
+        _uiState.update { it.copy(pickupQuery = "", pickupPlaceId = null, pickupResults = emptyList(), activeField = SearchField.PICKUP) }
     }
 
     fun onClearDrop() {
         _uiState.update { it.copy(dropQuery = "", dropPlaceId = null, dropResults = emptyList()) }
     }
 
+    // ✅ MODIFIED: This is the key fix
     fun onFocusChange(field: SearchField) {
-        _uiState.update { it.copy(activeField = field) }
+        if (field == SearchField.PICKUP && _uiState.value.pickupQuery == "Your Current Location") {
+            // When user taps the "Your Current Location" text, clear it for them
+            _uiState.update { it.copy(activeField = field, pickupQuery = "") }
+        } else {
+            _uiState.update { it.copy(activeField = field) }
+        }
     }
+
+    // ✅ ADDED: New function to handle focus loss
+    fun onFocusLost(field: SearchField) {
+        if (field == SearchField.PICKUP) {
+            if (_uiState.value.pickupQuery.isBlank()) {
+                // If user taps away from a blank pickup field, restore "Your Current Location"
+                _uiState.update { it.copy(pickupQuery = "Your Current Location", pickupPlaceId = "current_location") }
+            }
+        }
+        // No special logic needed for drop field
+    }
+
 
     private fun search(query: String, field: SearchField) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(300L) // Debounce
 
-            // ✅ FIX: Convert LatLng to String
             val location = _uiState.value.currentLocation
             val locationString = location?.let { "${it.latitude},${it.longitude}" } ?: ""
 
@@ -136,15 +156,16 @@ class HomeViewModel @Inject constructor(
                             _uiState.update { it.copy(isSearching = false) }
                         }
                         is Resource.Success -> {
-                            // ✅ FIX: Map data model to domain model
                             val mappedPredictions = result.data?.map { prediction ->
                                 AutocompletePrediction(
                                     placeId = prediction.placeId,
                                     primaryText = prediction.structuredFormatting.mainText,
-                                    secondaryText = prediction.structuredFormatting.secondaryText,
+                                    secondaryText = prediction.structuredFormatting.secondaryText ?: "", // <-- THIS IS THE FIX
                                     description = prediction.description
                                 )
                             } ?: emptyList()
+
+
 
                             if (field == SearchField.PICKUP) {
                                 _uiState.update { it.copy(pickupResults = mappedPredictions, isSearching = false) }
@@ -176,9 +197,13 @@ class HomeViewModel @Inject constructor(
                 )
             }
         }
+    }
 
-        // Check if we can navigate
+    // This function is still correct from the previous step
+    fun onContinueClicked() {
         val currentState = _uiState.value
+
+        // Ensure both IDs are valid before navigating
         if (!currentState.pickupPlaceId.isNullOrBlank() && !currentState.dropPlaceId.isNullOrBlank()) {
             val pickupDesc = if (currentState.pickupPlaceId == "current_location") "Your Current Location" else currentState.pickupQuery
 

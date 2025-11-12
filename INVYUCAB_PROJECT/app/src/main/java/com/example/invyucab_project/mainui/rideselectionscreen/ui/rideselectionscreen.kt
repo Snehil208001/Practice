@@ -450,7 +450,7 @@ fun RideOptionItem(ride: RideOption, isSelected: Boolean, onClick: () -> Unit) {
                 )
             } else if (ride.price != null) {
                 Text(
-                    text = "₹${ride.price}",
+                    text = "${ride.price}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     color = Color.Black
