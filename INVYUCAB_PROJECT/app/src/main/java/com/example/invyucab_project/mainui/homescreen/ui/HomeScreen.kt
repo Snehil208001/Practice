@@ -1,5 +1,29 @@
 package com.example.invyucab_project.mainui.homescreen.ui
 
+// --- START OF ADDED IMPORTS ---
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+// --- END OF ADDED IMPORTS ---
+
+// --- START OF ✅ ADDED IMPORTS ---
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.material3.SnackbarDuration // ✅ ADDED
+import androidx.compose.material3.SnackbarResult // ✅ ADDED
+// --- END OF ✅ ADDED IMPORTS ---
+
+import android.Manifest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,7 +71,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.invyucab_project.core.base.BaseViewModel
@@ -59,14 +82,144 @@ import com.example.invyucab_project.mainui.homescreen.viewmodel.HomeViewModel
 import com.example.invyucab_project.ui.theme.CabMintGreen
 import com.example.invyucab_project.ui.theme.CabVeryLightMint
 import com.example.invyucab_project.ui.theme.LightSlateGray
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // --- START OF ✅ MODIFIED CODE ---
+    val apiError by viewModel.apiError // ✅ MODIFIED: Read the State directly
+    val snackbarHostState = remember { SnackbarHostState() } // State for snackbar
+    // --- END OF ✅ MODIFIED CODE ---
+
+    // --- START OF ✅ ADDED LIFECYCLE OBSERVER ---
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            // This event fires every time the screen becomes active
+            if (event == Lifecycle.Event.ON_RESUME) {
+                // Re-run the location check
+                viewModel.getCurrentLocation()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        // This cleans up the observer when the composable is destroyed
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    // --- END OF ✅ ADDED LIFECYCLE OBSERVER ---
+
+    // --- START OF PERMISSION LOGIC ---
+
+    val context = LocalContext.current
+
+    // Launcher for App PERMISSIONS
+    val permissionSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        // This block executes when returning from settings.
+        // ✅ We can also trigger a re-check here
+        viewModel.getCurrentLocation()
+    }
+
+    // --- START OF ✅ ADDED CODE ---
+    // Launcher for Location SERVICES (GPS Toggle)
+    val locationServiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        // User has returned from the location settings screen.
+        // Re-check if they turned it on.
+        viewModel.getCurrentLocation()
+    }
+    // --- END OF ✅ ADDED CODE ---
+
+
+    val locationPermissionsState = rememberMultiplePermissionsState(
+        permissions = listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+    )
+
+    var permissionRequestLaunched by remember { mutableStateOf(false) }
+
+    LaunchedEffect(key1 = Unit) {
+        if (!locationPermissionsState.allPermissionsGranted) {
+            locationPermissionsState.launchMultiplePermissionRequest()
+            permissionRequestLaunched = true
+        }
+    }
+
+    LaunchedEffect(key1 = locationPermissionsState.allPermissionsGranted) {
+        if (locationPermissionsState.allPermissionsGranted) {
+            // ✅ Permission was just granted, fetch location
+            viewModel.getCurrentLocation()
+            // viewModel.onLocationPermissionGranted()
+        }
+    }
+
+    val showPermissionBanner = !locationPermissionsState.allPermissionsGranted && permissionRequestLaunched
+
+    // ✅ THIS IS THE KEY LOGIC
+    val onAllowClick: () -> Unit = {
+        if (locationPermissionsState.shouldShowRationale) {
+            // Case 1: User denied once. Show request dialog again.
+            // THIS IS THE "ALLOW -> APP PERMISSION" flow you want.
+            locationPermissionsState.launchMultiplePermissionRequest()
+        } else {
+            // Case 2: User permanently denied ("Don't ask again").
+            // It is IMPOSSIBLE to show the dialog. We must send to settings.
+            // THIS IS THE "ALLOW -> APP INFO" flow.
+            val intent = Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", context.packageName, null)
+            )
+            permissionSettingsLauncher.launch(intent)
+        }
+    }
+    // --- END OF PERMISSION LOGIC ---
+
+
+    // --- START OF ✅ MODIFIED CODE ---
+    // This LaunchedEffect will react when apiError changes
+    LaunchedEffect(apiError) {
+        apiError?.let { message ->
+
+            // Check if this is the specific GPS error
+            if (message.contains("location services (GPS)")) {
+                // Show snackbar with "Turn On" action
+                val result = snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = "Turn On",
+                    duration = SnackbarDuration.Long // Keep it on screen longer
+                )
+
+                if (result == SnackbarResult.ActionPerformed) {
+                    // User clicked "Turn On"
+                    val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                    locationServiceLauncher.launch(intent)
+                }
+
+            } else {
+                // Show a normal snackbar for all other errors
+                snackbarHostState.showSnackbar(message)
+            }
+
+            // Clear the error in the ViewModel so it doesn't show again
+            // until the next time we check (on resume)
+            viewModel.clearApiError() // This function is from BaseViewModel
+        }
+    }
+    // --- END OF ✅ MODIFIED CODE ---
+
 
     // Collect navigation events
     LaunchedEffect(key1 = true) {
@@ -75,8 +228,13 @@ fun HomeScreen(
                 is BaseViewModel.UiEvent.Navigate -> {
                     navController.navigate(event.route)
                 }
-
+                is BaseViewModel.UiEvent.ShowSnackbar -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                // ✅ --- THIS IS THE FIX ---
+                // Add an else branch to make the 'when' exhaustive
                 else -> {}
+                // ✅ --- END OF FIX ---
             }
         }
     }
@@ -86,6 +244,7 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = Color.White,
+        snackbarHost = { SnackbarHost(snackbarHostState) }, // <-- ✅ ADDED
         topBar = {
             TopAppBar(
                 title = { Text("Book a Ride", fontWeight = FontWeight.Bold) },
@@ -98,22 +257,21 @@ fun HomeScreen(
         bottomBar = {
             Column(
                 modifier = Modifier
-                    .background(Color.White) // Ensure background is white
-                    .imePadding() // This pushes the whole Column up when keyboard appears
+                    .background(Color.White)
+                    .imePadding()
             ) {
                 AnimatedVisibility(
                     visible = isButtonEnabled,
                     enter = fadeIn() + slideInVertically { it / 2 },
                     exit = fadeOut() + slideOutVertically { it / 2 }
                 ) {
-                    // The Button is now part of the bottomBar
                     Button(
                         onClick = { viewModel.onContinueClicked() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
-                            .padding(horizontal = 16.dp) // Padding for the button
-                            .padding(bottom = 8.dp), // Space between button and nav bar
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CabMintGreen),
                     ) {
                         Text(
@@ -124,17 +282,23 @@ fun HomeScreen(
                         )
                     }
                 }
-                // The AppBottomNavigation is now below the button
                 AppBottomNavigation(navController = navController, selectedItem = "Home")
             }
         }
-    ) { padding -> // These paddingValues from the Scaffold now perfectly account for the nav bar AND the button
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding) // ✅ This padding is all that's needed
+                .padding(padding)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
         ) {
+
+            AnimatedVisibility(visible = showPermissionBanner) {
+                LocationPermissionBanner(
+                    onAllowClick = onAllowClick
+                )
+            }
+
             SearchInputSection(
                 pickupQuery = uiState.pickupQuery,
                 dropQuery = uiState.dropQuery,
@@ -157,7 +321,6 @@ fun HomeScreen(
                 }
             )
 
-            // Show results based on which field is active
             val results = if (uiState.activeField == SearchField.PICKUP) {
                 uiState.pickupResults
             } else {
@@ -167,10 +330,9 @@ fun HomeScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.White) // White background for the list
+                    .background(Color.White)
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                // ✅ No more fixed bottom padding needed
             ) {
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -186,7 +348,6 @@ fun HomeScreen(
                         )
                     }
                 } else {
-                    // Default items when not searching
                     item {
                         SearchButton(
                             text = "Set on map",
@@ -208,7 +369,39 @@ fun HomeScreen(
     }
 }
 
-// --- StyledTextField (This is correct) ---
+// --- Other Composables (Unchanged) ---
+
+@Composable
+fun LocationPermissionBanner(
+    onAllowClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFFFBE6)) // Light yellow background
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "To see prices and availability, turn on location.",
+            modifier = Modifier.weight(1f),
+            color = Color.Black,
+            fontSize = 14.sp
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        TextButton(onClick = onAllowClick) {
+            Text(
+                "ALLOW",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
 
 @Composable
 fun StyledTextField(
@@ -268,8 +461,6 @@ fun StyledTextField(
     )
 }
 
-// --- SearchInputSection (This is correct) ---
-
 @Composable
 fun SearchInputSection(
     pickupQuery: String,
@@ -283,27 +474,18 @@ fun SearchInputSection(
     val pickupFocusRequester = remember { FocusRequester() }
     val dropFocusRequester = remember { FocusRequester() }
 
-    // ✅ ADDED: Flag to skip first composition
     val isInitialRun = remember { mutableStateOf(true) }
 
-    // This effect is necessary to handle focus changes
-    // when a prediction is tapped
     LaunchedEffect(activeField) {
-        // ✅ START OF MODIFIED CODE: KEYBOARD FIX
         if (isInitialRun.value) {
-            // Skip the first effect run to prevent keyboard on launch
-            // The default field is DROP, so this will trigger, set the flag, and not request focus
             isInitialRun.value = false
         } else {
-            // This is a subsequent run, triggered by user interaction (e.g., tapping PICKUP)
             if (activeField == SearchField.PICKUP) {
                 pickupFocusRequester.requestFocus()
             } else if (activeField == SearchField.DROP) {
-                // This will run if the state changes *back* to drop
                 dropFocusRequester.requestFocus()
             }
         }
-        // ✅ END OF MODIFIED CODE
     }
 
     Row(
@@ -354,8 +536,6 @@ fun SearchInputSection(
         }
     }
 }
-
-// --- Other Composables (Unchanged) ---
 
 @Composable
 fun LocationConnectorGraphic() {

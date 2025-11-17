@@ -6,24 +6,28 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+// ... (All other imports)
+import com.example.invyucab_project.mainui.adminscreen.ui.AdminScreen
 import com.example.invyucab_project.mainui.allservicesscreen.ui.AllServicesScreen
 import com.example.invyucab_project.mainui.authscreen.ui.AuthScreen
+import com.example.invyucab_project.mainui.driverdetailsscreen.ui.DriverDetailsScreen
+import com.example.invyucab_project.mainui.driverdocument.ui.DriverDocumentsScreen
+// ✅ --- NEW IMPORT ---
+import com.example.invyucab_project.mainui.driverprofilescreen.ui.DriverProfileScreen
+import com.example.invyucab_project.mainui.driverscreen.ui.DriverScreen
 import com.example.invyucab_project.mainui.homescreen.ui.HomeScreen
-// import com.example.invyucab_project.mainui.locationsearchscreen.ui.LocationSearchScreen // ❌ REMOVED
 import com.example.invyucab_project.mainui.onboardingscreen.ui.OnboardingScreen
 import com.example.invyucab_project.mainui.otpscreen.ui.OtpScreen
-import com.example.invyucab_project.mainui.profilescreen.ui.ProfileScreen
-import com.example.invyucab_project.mainui.rideselectionscreen.ui.RideSelectionScreen
-import com.example.invyucab_project.mainui.splashscreen_loggedin.ui.SplashScreenLoggedIn
-import com.example.invyucab_project.mainui.travelscreen.ui.TravelScreen
-import com.example.invyucab_project.mainui.userdetailsscreen.ui.UserDetailsScreen
 import com.example.invyucab_project.mainui.profilescreen.editprofilescreen.ui.EditProfileScreen
 import com.example.invyucab_project.mainui.profilescreen.memberlevelscreen.ui.MemberLevelScreen
 import com.example.invyucab_project.mainui.profilescreen.paymentmethodscreen.ui.PaymentMethodScreen
-import com.example.invyucab_project.mainui.adminscreen.ui.AdminScreen
-import com.example.invyucab_project.mainui.driverdetailsscreen.ui.DriverDetailsScreen
-import com.example.invyucab_project.mainui.driverscreen.ui.DriverScreen
+import com.example.invyucab_project.mainui.profilescreen.ui.ProfileScreen
+import com.example.invyucab_project.mainui.rideselectionscreen.ui.RideSelectionScreen
 import com.example.invyucab_project.mainui.roleselectionscreen.ui.RoleSelectionScreen
+import com.example.invyucab_project.mainui.splashscreen_loggedin.ui.SplashScreenLoggedIn
+import com.example.invyucab_project.mainui.travelscreen.ui.TravelScreen
+import com.example.invyucab_project.mainui.userdetailsscreen.ui.UserDetailsScreen
+import com.example.invyucab_project.mainui.vehiclepreferences.ui.VehiclePreferencesScreen
 
 @Composable
 fun NavGraph(
@@ -34,6 +38,7 @@ fun NavGraph(
         navController = navController,
         startDestination = startDestination
     ) {
+        // ... (SplashScreen, OnboardingScreen, AuthScreen) ...
         composable(Screen.SplashScreenLoggedIn.route) {
             SplashScreenLoggedIn(navController = navController)
         }
@@ -44,6 +49,7 @@ fun NavGraph(
         composable(Screen.AuthScreen.route) {
             AuthScreen(navController = navController)
         }
+
         composable(
             route = Screen.OtpScreen.route,
             arguments = listOf(
@@ -54,12 +60,17 @@ fun NavGraph(
                 navArgument("gender") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("dob") { type = NavType.StringType; nullable = true; defaultValue = null },
                 navArgument("license") { type = NavType.StringType; nullable = true; defaultValue = null },
-                navArgument("vehicle") { type = NavType.StringType; nullable = true; defaultValue = null },
-                navArgument("aadhaar") { type = NavType.StringType; nullable = true; defaultValue = null }
+                navArgument("aadhaar") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("vehicleNumber") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("vehicleModel") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("vehicleType") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("vehicleColor") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("vehicleCapacity") { type = NavType.StringType; nullable = true; defaultValue = null }
             )
         ) {
             OtpScreen(navController = navController)
         }
+
         composable(
             route = Screen.UserDetailsScreen.route,
             arguments = listOf(
@@ -84,10 +95,7 @@ fun NavGraph(
             route = Screen.DriverDetailsScreen.route,
             arguments = listOf(
                 navArgument("phone") { type = NavType.StringType },
-                navArgument("role") { type = NavType.StringType },
-                navArgument("name") { type = NavType.StringType },
-                navArgument("gender") { type = NavType.StringType },
-                navArgument("dob") { type = NavType.StringType }
+                navArgument("role") { type = NavType.StringType }
             )
         ) {
             DriverDetailsScreen(navController = navController)
@@ -113,6 +121,19 @@ fun NavGraph(
         composable(Screen.ProfileScreen.route) {
             ProfileScreen(navController = navController)
         }
+        composable(Screen.DriverDocumentsScreen.route) {
+            DriverDocumentsScreen(navController = navController)
+        }
+        composable(Screen.VehiclePreferencesScreen.route) {
+            VehiclePreferencesScreen(navController = navController)
+        }
+
+        // ✅ --- NEW SCREEN COMPOSABLE ---
+        composable(Screen.DriverProfileScreen.route) {
+            DriverProfileScreen(navController = navController)
+        }
+        // ✅ ------------------------------
+
         composable(Screen.EditProfileScreen.route) {
             EditProfileScreen(navController = navController)
         }
@@ -122,13 +143,6 @@ fun NavGraph(
         composable(Screen.PaymentMethodScreen.route) {
             PaymentMethodScreen(navController = navController)
         }
-
-        // ❌❌❌ REMOVED ❌❌❌
-        /*
-        composable(Screen.LocationSearchScreen.route) {
-            LocationSearchScreen(navController = navController)
-        }
-        */
 
         composable(
             route = Screen.RideSelectionScreen.route,

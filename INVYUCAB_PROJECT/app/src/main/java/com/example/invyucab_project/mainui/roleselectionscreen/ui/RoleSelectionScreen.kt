@@ -52,6 +52,10 @@ fun RoleSelectionScreen(
                         duration = SnackbarDuration.Short
                     )
                 }
+                // ✅ --- THIS IS THE FIX ---
+                // Add an else branch to make the 'when' exhaustive
+                else -> {}
+                // ✅ --- END OF FIX ---
             }
         }
     }
@@ -120,7 +124,7 @@ fun RoleSelectionScreen(
 
                 // RoleCard for Driver
                 RoleCard(
-                    title = "Driver",
+                    title = "Pilot",
                     description = "Offer rides and earn money.",
                     iconRes = R.drawable.onboarding2, // Replace with actual driver icon
                     onClick = { viewModel.onRoleSelected("Driver") },
